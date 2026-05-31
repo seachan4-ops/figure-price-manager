@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>フィギュア買取価格管理</title>
+
+<link rel="manifest" href="manifest.json">
+
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<style>
+
+body{
+    font-family:sans-serif;
+    background:#f3f4f6;
+    margin:0;
+    padding:15px;
+}
+
+h1{
+    text-align:center;
+}
+
+.card{
+    background:white;
+    padding:15px;
+    border-radius:12px;
+    margin-bottom:15px;
+    box-shadow:0 2px 6px rgba(0,0,0,.1);
+}
+
+input,
+select,
+button{
+    width:100%;
+    box-sizing:border-box;
+    padding:10px;
+    margin-top:8px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    font-size:16px;
+}
+
+button{
+    border:none;
+    cursor:pointer;
+}
+
+.save-btn{
+    background:#2563eb;
+    color:white;
+}
+
+.edit-btn{
+    background:#f59e0b;
+    color:white;
+}
+
+.delete-btn{
+    background:#dc2626;
+    color:white;
+}
+
+.cancel-btn{
+    background:#6b7280;
+    color:white;
+}
+
+.csv-btn{
+    background:#16a34a;
+    color:white;
+}
+
+.danger-btn{
+    background:#991b1b;
+    color:white;
+}
+
+.item{
+    background:white;
+    padding:12px;
+    border-radius:12px;
+    margin-bottom:10px;
+    box-shadow:0 2px 5px rgba(0,0,0,.08);
+}
+
+.name{
+    font-size:18px;
+    font-weight:bold;
+}
+
+.price{
+    font-size:22px;
+    font-weight:bold;
+    margin-top:5px;
+}
+
+.date{
+    color:#666;
+    margin-top:5px;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>フィギュア買取価格管理</h1>
+
+<div class="card">
+
+<input
+list="nameSuggestions"
+id="name"
+placeholder="フィギュア名">
+
+<datalist id="nameSuggestions"></datalist>
+
+<input
+type="number"
+id="price"
+placeholder="買取価格">
+
+<input
+type="date"
+id="date">
+
+<button
+class="save-btn"
+onclick="saveFigure()">
+保存
+</button>
+
+<button
+class="cancel-btn"
+id="cancelBtn"
+style="display:none"
+onclick="cancelEdit()">
+編集取消
+</button>
+
+</div>
+
+<div class="card">
+
+<input
+type="text"
+id="search"
+placeholder="名前検索"
+oninput="render()">
+
+<select
+id="sortType"
+onchange="render()">
+
+<option value="date_desc">
+日付(新→旧)
+</option>
+
+<option value="date_asc">
+日付(旧→新)
+</option>
+
+<option value="name_asc">
+名前順
+</option>
+
+<option value="price_desc">
+価格(高→低)
+</option>
+
+<option value="price_asc">
+価格(低→高)
+</option>
+
+</select>
+
+<button
+class="csv-btn"
+onclick="exportCSV()">
+CSVエクスポート
+</button>
+
+<input
+type="file"
+id="csvFile"
+accept=".csv"
+onchange="importCSV(event)">
+
+<button
+class="danger-btn"
+onclick="deleteAllData()">
+全件削除
+</button>
+
+</div>
+
+<div id="list"></div>
+
+<script>
+
+let figures =
+JSON.parse(
+localStorage.getItem("figureData")
+) || [];
+
+let editingId = null;
+function saveStorage(){
+    localStorage.setItem(
+        "figureData",
+        JSON.stringify(figures)
+    );
+}
+
+function updateSuggestions(){
+
+    const datalist =
+    document.getElementById(
+        "nameSuggestions"
+    );
+
+    datalist.innerHTML = "";
+
+    const names =
+    [...new Set(
+        figures.map(f => f.name)
+    )];
+
+    names.sort();
+
+    names.forEach(name => {
+
+        const option =
+        document.createElement(
+            "option"
+        );
+
+        option.value = name;
+
+        datalist.appendChild(
+            option
+        );
+
+    });
+}
+
+function clearForm(){
+
+    document.getElementById(
+        "name"
+    ).value = "";
+
+    document.getElementById(
+        "price"
+    ).value = "";
+
+    document.getElementById(
+        "date"
+    ).value = "";
+
+    editingId = null;
+
+    document.getElementById(
+        "cancelBtn"
+    ).style.display = "none";
+}
+
+function cancelEdit(){
+    clearForm();
+}
+
+function saveFigure(){
+
+    const name =
+    document.getElementById(
+        "name"
+    ).value.trim();
+
+    const price =
+    document.getElementById(
+        "price"
+    ).value;
+
+    const date =
+    document.getElementById(
+        "date"
+    ).value;
+
+    if(!name || !price || !date){
+
+        alert(
+            "フィギュア名・価格・日付は必須です"
+        );
+
+        return;
+    }
+
+    if(editingId){
+
+        const target =
+        figures.find(
+            f => f.id === editingId
+        );
+
+        if(target){
+
+            target.name = name;
+            target.price =
+                Number(price);
+
+            target.date = date;
+        }
+
+    }else{
+
+        figures.push({
+            id:
+            Date.now().toString(),
+
+            name:name,
+
+            price:Number(price),
+
+            date:date
+        });
+
+    }
+
+    saveStorage();
+
+    updateSuggestions();
+
+    render();
+
+    clearForm();
+}
+
+function editFigure(id){
+
+    const item =
+    figures.find(
+        f => f.id === id
+    );
+
+    if(!item) return;
+
+    editingId = id;
+
+    document.getElementById(
+        "name"
+    ).value = item.name;
+
+    document.getElementById(
+        "price"
+    ).value = item.price;
+
+    document.getElementById(
+        "date"
+    ).value = item.date;
+
+    document.getElementById(
+        "cancelBtn"
+    ).style.display = "block";
+
+    window.scrollTo({
+        top:0,
+        behavior:"smooth"
+    });
+}
+
+function deleteFigure(id){
+
+    if(
+        !confirm(
+            "削除しますか？"
+        )
+    ){
+        return;
+    }
+
+    figures =
+    figures.filter(
+        f => f.id !== id
+    );
+
+    saveStorage();
+
+    updateSuggestions();
+
+    render();
+}
+
+function deleteAllData(){
+
+    if(
+        !confirm(
+            "全データを削除しますか？"
+        )
+    ){
+        return;
+    }
+
+    figures = [];
+
+    saveStorage();
+
+    render();
+
+    updateSuggestions();
+}
+function exportCSV(){
+
+    let csv =
+    "フィギュア名,買取価格,買取日\n";
+
+    figures.forEach(item => {
+
+        csv +=
+        `"${item.name}",${item.price},${item.date}\n`;
+
+    });
+
+    const blob =
+    new Blob(
+        [csv],
+        {
+            type:
+            "text/csv;charset=utf-8;"
+        }
+    );
+
+    const link =
+    document.createElement("a");
+
+    link.href =
+    URL.createObjectURL(blob);
+
+    link.download =
+    "figure-price-data.csv";
+
+    link.click();
+}
+
+function importCSV(event){
+
+    const file =
+    event.target.files[0];
+
+    if(!file) return;
+
+    const reader =
+    new FileReader();
+
+    reader.onload =
+    function(e){
+
+        const text =
+        e.target.result;
+
+        const rows =
+        text.split("\n").slice(1);
+
+        rows.forEach(row => {
+
+            if(!row.trim()) return;
+
+            const cols =
+            row.split(",");
+
+            const name =
+            cols[0]
+            .replaceAll('"',"");
+
+            const price =
+            Number(cols[1]);
+
+            const date =
+            cols[2]?.trim();
+
+            if(
+                !name ||
+                !price ||
+                !date
+            ){
+                return;
+            }
+
+            figures.push({
+
+                id:
+                Date.now()
+                .toString()
+                +
+                Math.random(),
+
+                name,
+                price,
+                date
+
+            });
+
+        });
+
+        saveStorage();
+
+        updateSuggestions();
+
+        render();
+
+        alert(
+            "CSV取込完了"
+        );
+    };
+
+    reader.readAsText(
+        file
+    );
+}
+
+function render(){
+
+    const list =
+    document.getElementById(
+        "list"
+    );
+
+    const keyword =
+    document
+    .getElementById(
+        "search"
+    )
+    .value
+    .toLowerCase();
+
+    const sortType =
+    document.getElementById(
+        "sortType"
+    ).value;
+
+    let data =
+    figures.filter(item =>
+
+        item.name
+        .toLowerCase()
+        .includes(keyword)
+
+    );
+
+    switch(sortType){
+
+        case "name_asc":
+
+            data.sort(
+                (a,b)=>
+
+                a.name.localeCompare(
+                    b.name,
+                    "ja"
+                )
+            );
+
+            break;
+
+        case "price_desc":
+
+            data.sort(
+                (a,b)=>
+
+                b.price-a.price
+            );
+
+            break;
+
+        case "price_asc":
+
+            data.sort(
+                (a,b)=>
+
+                a.price-b.price
+            );
+
+            break;
+
+        case "date_asc":
+
+            data.sort(
+                (a,b)=>
+
+                new Date(a.date)
+                -
+                new Date(b.date)
+            );
+
+            break;
+
+        default:
+
+            data.sort(
+                (a,b)=>
+
+                new Date(b.date)
+                -
+                new Date(a.date)
+            );
+    }
+
+    list.innerHTML = "";
+
+    data.forEach(item => {
+
+        list.innerHTML += `
+
+        <div class="item">
+
+            <div class="name">
+                ${item.name}
+            </div>
+
+            <div class="price">
+                ¥${item.price.toLocaleString()}
+            </div>
+
+            <div class="date">
+                買取日:
+                ${item.date}
+            </div>
+
+            <button
+            class="edit-btn"
+            onclick="editFigure('${item.id}')">
+
+            編集
+
+            </button>
+
+            <button
+            class="delete-btn"
+            onclick="deleteFigure('${item.id}')">
+
+            削除
+
+            </button>
+
+        </div>
+
+        `;
+    });
+}
+
+updateSuggestions();
+
+render();
+
+if(
+    "serviceWorker"
+    in navigator
+){
+
+    window.addEventListener(
+        "load",
+        () => {
+
+            navigator
+            .serviceWorker
+            .register(
+                "./service-worker.js"
+            )
+            .then(() => {
+
+                console.log(
+                    "Service Worker 登録成功"
+                );
+
+            })
+            .catch(err => {
+
+                console.log(
+                    "Service Worker 登録失敗",
+                    err
+                );
+
+            });
+
+        }
+    );
+}
+
+</script>
+
+</body>
+</html>
